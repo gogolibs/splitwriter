@@ -1,9 +1,9 @@
 # splitwriter #
 
 [![GoDoc](https://godoc.org/github.com/gogolibs/splitwriter?status.svg)](https://pkg.go.dev/github.com/gogolibs/splitwriter)
-[![Go Report Card](https://goreportcard.com/badge/github.com/gogolibs/splitwriter)](https://goreportcard.com/report/github.com/gogolibs/splitwriter)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gogolibs/splitwriter?style=flat)](https://goreportcard.com/report/github.com/gogolibs/splitwriter)
 [![CI](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml/badge.svg)](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml)
-[![codecov](https://codecov.io/gh/gogolibs/splitwriter/branch/main/graph/badge.svg?token=JXSDP6Ifxi)](https://codecov.io/gh/gogolibs/splitwriter)
+[![codecov](https://codecov.io/gh/gogolibs/splitwriter/branch/main/graph/badge.svg?token=Nbd92Hkjl6)](https://codecov.io/gh/gogolibs/splitwriter)
 
 **splitwriter** is utility package that provides a wrapper around `io.Writer`
 that tokenizes data supplied to `Write` using `bufio.SplitFunc`, 

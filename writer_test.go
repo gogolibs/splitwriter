@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-
-
 type testCase struct {
 	name   string
 	input  []string

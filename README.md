@@ -5,8 +5,9 @@
 [![CI](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml/badge.svg)](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml)
 [![codecov](https://codecov.io/gh/gogolibs/splitwriter/branch/main/graph/badge.svg?token=JXSDP6Ifxi)](https://codecov.io/gh/gogolibs/splitwriter)
 
-**splitwriter** is utility package that provides a wrapper `io.Writer` that tokenizes data supplied to `Write` using
-`bufio.SplitFunc`, buffers it as necessary and writes tokens via separate writes to the underlying writer.
+**splitwriter** is utility package that provides a wrapper around `io.Writer`
+that tokenizes data supplied to `Write` using `bufio.SplitFunc`, 
+buffers it as necessary and writes tokens via separate writes to the underlying writer.
 
 ```go
 package splitwriter_test

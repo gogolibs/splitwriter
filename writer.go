@@ -2,95 +2,103 @@ package splitwriter
 
 import (
 	"bufio"
+	"bytes"
 	"github.com/pkg/errors"
-	"io"
 )
+
+// Handler is an interface that must be implemented by client handlers that wish to
+// handle tokens passed by splitwriter.Writer.
+type Handler interface {
+	Handle(token []byte) error
+}
+
+// HandlerFunc is an alternative way to specify a handler for splitwriter.Writer.
+type HandlerFunc func(token []byte) error
+
+type funcHandler struct {
+	f HandlerFunc
+}
+
+func (h *funcHandler) Handle(token []byte) error {
+	return h.f(token)
+}
 
 // SplitFunc is the signature of the split function used to tokenize the
 // input. It is a wrapper around bufio.SplitFunc and the only difference
-// is that it does not receive atEOF flag.
+// is that it does not receive atEOF flag. This flag must be always set to false
+// as an io.Writer has no way of determining that it is at the end of the input.
 type SplitFunc func(data []byte) (advance int, token []byte, err error)
 
-// New returns a new Writer.
-// The split function defaults to ScanLines.
-func New(writer io.Writer) *Writer {
+// NewWriter returns a new splitwriter.Writer that will pass any tokens that were encountered
+// when writing to it to splitwriter.Handler.
+func NewWriter(handler Handler) *Writer {
 	return &Writer{
-		writer:      writer,
-		split:       ScanLines,
+		handler:     handler,
 		writeCalled: false,
-		leftover:    make([]byte, 0),
+		split:       ScanLines,
+		buffer:      new(bytes.Buffer),
 	}
 }
 
-// Writer is used to tokenize data supplied into Write method
-// before passing it to the underlying writer. Buffers data as necessary.
-// Can be viewed as an alternative of bufio.Scanner for writers.
+// NewWriterFunc is a simplified version of a constructor splitwriter.NewWriter that allows
+// to specify a splitwriter.HandlerFunc, instead of a full-blown splitwriter.Handler implementation.
+func NewWriterFunc(f HandlerFunc) *Writer {
+	return NewWriter(&funcHandler{f: f})
+}
+
 type Writer struct {
-	writer      io.Writer // The writer provided by the client.
-	split       SplitFunc // The function to split the tokens.
-	writeCalled bool      // Write has been called; buffer is in use.
-	leftover    []byte    // Missing or incomplete token data from previous writes.
+	handler     Handler
+	writeCalled bool          // Write has been called; buffer is in use.
+	split       SplitFunc     // A function to split the tokens.
+	buffer      *bytes.Buffer // A buffer to hold incomplete tokens.
 }
 
-func zeroIfLessThanZero(bytesWritten int) int {
-	if bytesWritten < 0 {
-		return 0
-	}
-	return bytesWritten
-}
-
-// Write tokenizes data and passes it to an underlying writer by calling its Write method with data holding
-// every token, one at a time. As a consequence, every Write call may result in 0..n calls of the writer.Write
-// depending on how many tokens has been scanned.
 func (w *Writer) Write(data []byte) (int, error) {
 	w.writeCalled = true
-	bytesWritten := -len(w.leftover)
-	dataRemainder := make([]byte, len(w.leftover)+len(data))
-	for index, b := range w.leftover {
-		dataRemainder[index] = b
+	initialBufferLen := w.BufferLen()
+	w.buffer.Write(data)
+	dataRemainder := w.buffer.Bytes()
+	bytesWritten := 0
+	if initialBufferLen > 0 {
+		advance, token, err := w.split(dataRemainder)
+		if err != nil {
+			w.buffer.Truncate(initialBufferLen)
+			return 0, errors.Wrap(err, "failed to split")
+		}
+		if advance == 0 {
+			return len(data), nil
+		}
+		err = w.handler.Handle(token)
+		if err != nil {
+			w.buffer.Truncate(initialBufferLen)
+			return 0, errors.Wrapf(err, `failed to handle token "%s"`, string(token))
+		}
+		bytesWritten += advance - initialBufferLen
+		dataRemainder = dataRemainder[advance:]
 	}
-	for index, b := range data {
-		dataRemainder[len(w.leftover)+index] = b
-	}
+	w.buffer.Reset()
 	for {
 		if len(dataRemainder) == 0 {
 			break
 		}
 		advance, token, err := w.split(dataRemainder)
 		if err != nil {
-			return zeroIfLessThanZero(bytesWritten), errors.Wrap(err, "failed to split")
+			return bytesWritten, errors.Wrap(err, "failed to split")
 		}
-		// If advance is zero it means no token has been found.
-		// Need to wait for more writes to supply the token.
 		if advance == 0 {
 			break
 		}
-		tokenBytesWritten, err := w.writer.Write(token)
+		err = w.handler.Handle(token)
 		if err != nil {
-			return zeroIfLessThanZero(bytesWritten), errors.Wrap(err, "failed to write")
-		}
-		if tokenBytesWritten != len(token) {
-			var description string
-			if tokenBytesWritten > len(token) {
-				description = "long"
-			} else {
-				description = "short"
-			}
-			return zeroIfLessThanZero(bytesWritten), errors.Errorf(
-				"%s write: have %d want %d bytes",
-				description,
-				tokenBytesWritten,
-				len(token),
-			)
+			return bytesWritten, errors.Wrapf(err, `failed to handle token "%s"`, string(token))
 		}
 		dataRemainder = dataRemainder[advance:]
 		bytesWritten += advance
 	}
-	w.leftover = make([]byte, len(dataRemainder))
-	for index, b := range dataRemainder {
-		w.leftover[index] = b
+	if len(dataRemainder) > 0 {
+		w.buffer.Write(dataRemainder)
+		bytesWritten += len(dataRemainder)
 	}
-	bytesWritten += len(dataRemainder)
 	return bytesWritten, nil
 }
 
@@ -98,16 +106,17 @@ func (w *Writer) Write(data []byte) (int, error) {
 // The default split function is ScanLines.
 //
 // Split panics if it is called after writing has started.
-func (w *Writer) Split(split SplitFunc) {
+func (w *Writer) Split(split SplitFunc) *Writer {
 	if w.writeCalled {
 		panic("Split called after Write")
 	}
 	w.split = split
+	return w
 }
 
 // BufferLen returns the length of the buffered data (missing or incomplete token).
 func (w *Writer) BufferLen() int {
-	return len(w.leftover)
+	return w.buffer.Len()
 }
 
 // WrapBufioSplitFunc is used to wrap bufio.SplitFunc, excluding atEOF argument by setting

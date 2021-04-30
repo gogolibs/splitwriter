@@ -5,9 +5,9 @@
 [![CI](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml/badge.svg)](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml)
 [![codecov](https://codecov.io/gh/gogolibs/splitwriter/branch/main/graph/badge.svg?token=Nbd92Hkjl6)](https://codecov.io/gh/gogolibs/splitwriter)
 
-**splitwriter** is utility package that provides a wrapper around `io.Writer`
-that tokenizes data supplied to `Write` using `bufio.SplitFunc`, 
-buffers it as necessary and writes tokens via separate writes to the underlying writer.
+**splitwriter** provides an `io.Writer` implementation that tokenizes the data written to it using `bufio.SplitFunc`
+and allows to handle tokens by providing an implementation of `splitwriter.Handler`
+or just a simple `splitwriter.HandlerFunc`. A practical example:
 
 ```go
 package splitwriter_test
@@ -15,31 +15,19 @@ package splitwriter_test
 import (
 	"github.com/gogolibs/splitwriter"
 	"github.com/stretchr/testify/require"
+	"os/exec"
 	"testing"
 )
 
-type testWriter struct {
-	result []string
-}
-
-func (w *testWriter) Write(data []byte) (int, error) {
-	w.result = append(w.result, string(data))
-	return len(data), nil
-}
-
 func TestExample(t *testing.T) {
-	underlyingWriter := &testWriter{result: []string{}}
-	splitWriter := splitwriter.New(underlyingWriter)
-	splitWriter.Split(splitwriter.ScanLines)
-	data := []byte("one\ntwo\nthree\nincomplete line")
-	bytesWritten, err := splitWriter.Write(data)
+	cmd := exec.Command("echo", "-e", "one\ntwo\nthree")
+	var result []string
+	cmd.Stdout = splitwriter.NewWriterFunc(func(token []byte) error {
+		result = append(result, string(token))
+		return nil
+	}).Split(splitwriter.ScanLines)
+	err := cmd.Run()
 	require.NoError(t, err)
-	require.Equal(t, len(data), bytesWritten)
-	require.Equal(t, []string{
-		"one",
-		"two",
-		"three",
-	}, underlyingWriter.result)
-	require.Equal(t, len([]byte("incomplete line")), splitWriter.BufferLen())
+	require.Equal(t, []string{"one", "two", "three"}, result)
 }
 ```

@@ -46,6 +46,8 @@ func NewWriterFunc(f HandlerFunc) *Writer {
 	return NewWriter(&funcHandler{f: f})
 }
 
+// Writer implements io.Writer and hands over any tokens found via splitwriter.SplitFunc
+// to the handler.
 type Writer struct {
 	handler     Handler
 	writeCalled bool          // Write has been called; buffer is in use.
@@ -53,6 +55,7 @@ type Writer struct {
 	buffer      *bytes.Buffer // A buffer to hold incomplete tokens.
 }
 
+// Write handles data by splitting it into tokens and hading them over to handler.Handle.
 func (w *Writer) Write(data []byte) (int, error) {
 	w.writeCalled = true
 	initialBufferLen := w.BufferLen()

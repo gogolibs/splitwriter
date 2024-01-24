@@ -15,12 +15,8 @@ type Handler interface {
 // HandlerFunc is an alternative way to specify a handler for splitwriter.Writer.
 type HandlerFunc func(token []byte) error
 
-type funcHandler struct {
-	f HandlerFunc
-}
-
-func (h *funcHandler) Handle(token []byte) error {
-	return h.f(token)
+func (f HandlerFunc) Handle(token []byte) error {
+	return f(token)
 }
 
 // SplitFunc is the signature of the split function used to tokenize the
@@ -29,21 +25,15 @@ func (h *funcHandler) Handle(token []byte) error {
 // as an io.Writer has no way of determining that it is at the end of the input.
 type SplitFunc func(data []byte) (advance int, token []byte, err error)
 
-// NewWriter returns a new splitwriter.Writer that will pass any tokens that were encountered
+// New returns a new splitwriter.Writer that will pass any tokens that were encountered
 // when writing to it to splitwriter.Handler.
-func NewWriter(handler Handler) *Writer {
+func New(handler Handler) *Writer {
 	return &Writer{
 		handler:     handler,
 		writeCalled: false,
 		split:       ScanLines,
 		buffer:      new(bytes.Buffer),
 	}
-}
-
-// NewWriterFunc is a simplified version of a constructor splitwriter.NewWriter that allows
-// to specify a splitwriter.HandlerFunc, instead of a full-blown splitwriter.Handler implementation.
-func NewWriterFunc(f HandlerFunc) *Writer {
-	return NewWriter(&funcHandler{f: f})
 }
 
 // Writer implements io.Writer and hands over any tokens found via splitwriter.SplitFunc

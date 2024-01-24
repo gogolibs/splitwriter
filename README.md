@@ -5,7 +5,8 @@
 [![CI](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml/badge.svg)](https://github.com/gogolibs/splitwriter/actions/workflows/test-and-coverage.yml)
 [![codecov](https://codecov.io/gh/gogolibs/splitwriter/branch/main/graph/badge.svg?token=Nbd92Hkjl6)](https://codecov.io/gh/gogolibs/splitwriter)
 
-**splitwriter** provides an `io.Writer` implementation that tokenizes the data written to it using `bufio.SplitFunc`
+**splitwriter** provides an `io.Writer` implementation that
+tokenizes the data written to it using `bufio.SplitFunc`
 and allows to handle tokens by providing an implementation of `splitwriter.Handler`
 or just a simple `splitwriter.HandlerFunc`. A practical example:
 
@@ -14,20 +15,21 @@ package splitwriter_test
 
 import (
 	"github.com/gogolibs/splitwriter"
-	"github.com/stretchr/testify/require"
-	"os/exec"
+	"github.com/stretchr/testify/assert"
+	"io"
+	"strings"
 	"testing"
 )
 
 func TestExample(t *testing.T) {
-	cmd := exec.Command("echo", "-e", "one\ntwo\nthree")
+	reader := strings.NewReader("one\ntwo\nthree\n")
 	var result []string
-	cmd.Stdout = splitwriter.NewWriterFunc(func(token []byte) error {
+	writer := splitwriter.New(splitwriter.HandlerFunc(func(token []byte) error {
 		result = append(result, string(token))
 		return nil
-	}).Split(splitwriter.ScanLines)
-	err := cmd.Run()
-	require.NoError(t, err)
-	require.Equal(t, []string{"one", "two", "three"}, result)
+	})).Split(splitwriter.ScanLines)
+	_, err := io.Copy(writer, reader)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"one", "two", "three"}, result)
 }
 ```
